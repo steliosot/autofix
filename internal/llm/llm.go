@@ -22,6 +22,7 @@ type Suggestion struct {
 	Explanation string    `json:"explanation"`
 	ProposedFix string    `json:"proposed_fix"`
 	RiskLevel   RiskLevel `json:"risk_level"`
+	FixType     string    `json:"fix_type"`
 }
 
 type Environment struct {
@@ -70,8 +71,8 @@ func (o *OpenAIClient) GetSuggestion(req *Request) (*Suggestion, error) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": o.Model,
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are a DevOps fix assistant. Given a failed command, respond with ONLY a JSON object (no markdown, no explanation outside JSON): {\"explanation\": \"one sentence\", \"proposed_fix\": \"single shell command\", \"risk_level\": \"low\"}. If no fix exists, return {\"explanation\": \"cannot fix\", \"proposed_fix\": \"\", \"risk_level\": \"high\"}"},
-			{"role": "user", "content": fmt.Sprintf("Failed command: %s\nStderr: %s\nOS: %s, Package Manager: %s\n\nReturn JSON with proposed_fix as a single shell command or empty if unfixable.", req.Command, req.Stderr, req.Environment.OS, req.Environment.PackageManager)},
+			{"role": "system", "content": "You are a DevOps fix assistant. Analyze failed commands. fix_type should be 'replacement' if the command is a typo (return the corrected command), or 'preparation' if installing a missing dependency. Respond ONLY with JSON: {\"explanation\": \"one sentence\", \"proposed_fix\": \"command\", \"risk_level\": \"low\", \"fix_type\": \"replacement\" or \"preparation\"}"},
+			{"role": "user", "content": fmt.Sprintf("Failed command: %s\nStderr: %s\nOS: %s, Package Manager: %s\nReturn JSON.", req.Command, req.Stderr, req.Environment.OS, req.Environment.PackageManager)},
 		},
 	})
 

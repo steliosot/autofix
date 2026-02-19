@@ -44,7 +44,7 @@ func (f *FixEngine) ExecuteWithRetry(command string, attempt int) (*executor.Res
 	}
 
 	errorInfo := errorparser.Parse(result.Stderr, result.ExitCode)
-	fixCmd, err := f.GetFix(errorInfo, command, result.Stderr, attempt)
+	fixCmd, fixType, err := f.GetFix(errorInfo, command, result.Stderr, attempt)
 
 	if err != nil {
 		return result, err
@@ -85,21 +85,27 @@ func (f *FixEngine) ExecuteWithRetry(command string, attempt int) (*executor.Res
 	fixResult, _ := executor.Runner(fixExec)
 
 	if !fixResult.Success {
-		return result, fmt.Errorf("fix command failed")
+		fmt.Printf("[Fix Failed] %s\n", fixResult.Stderr)
+		return result, fmt.Errorf("fix command failed: %s", fixResult.Stderr)
+	}
+
+	if fixType == "replacement" {
+		fmt.Println("[Success]")
+		return fixResult, nil
 	}
 
 	fmt.Printf("[Retry %d/%d]\n", attempt+1, MaxRetries)
 	return f.ExecuteWithRetry(command, attempt+1)
 }
 
-func (f *FixEngine) GetFix(errorInfo *errorparser.ErrorInfo, originalCommand, stderr string, attempt int) (string, error) {
+func (f *FixEngine) GetFix(errorInfo *errorparser.ErrorInfo, originalCommand, stderr string, attempt int) (string, string, error) {
 	deterministicFix := f.getDeterministicFix(errorInfo)
 	if deterministicFix != "" {
-		return deterministicFix, nil
+		return deterministicFix, "preparation", nil
 	}
 
 	if attempt > 0 {
-		return "", nil
+		return "", "", nil
 	}
 
 	llmReq := &llm.Request{
@@ -119,16 +125,21 @@ func (f *FixEngine) GetFix(errorInfo *errorparser.ErrorInfo, originalCommand, st
 
 	suggestion, err := f.LLMClient.GetSuggestion(llmReq)
 	if err != nil {
-		return "", err
+		return "", "", err
+	}
+
+	fixType := suggestion.FixType
+	if fixType == "" {
+		fixType = "preparation"
 	}
 
 	if suggestion.RiskLevel == llm.RiskLow {
-		return suggestion.ProposedFix, nil
+		return suggestion.ProposedFix, fixType, nil
 	}
 
 	cfg := config.Get()
 	if cfg.Safety.AutoExecute {
-		return suggestion.ProposedFix, nil
+		return suggestion.ProposedFix, fixType, nil
 	}
 
 	fmt.Printf("[LLM Suggestion] %s\n", suggestion.Explanation)
@@ -140,10 +151,10 @@ func (f *FixEngine) GetFix(errorInfo *errorparser.ErrorInfo, originalCommand, st
 	fmt.Scanln(&response)
 
 	if strings.ToLower(response) == "y" {
-		return suggestion.ProposedFix, nil
+		return suggestion.ProposedFix, fixType, nil
 	}
 
-	return "", nil
+	return "", "", nil
 }
 
 func (f *FixEngine) getDeterministicFix(errorInfo *errorparser.ErrorInfo) string {
