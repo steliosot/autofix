@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 type RiskLevel string
@@ -61,28 +62,27 @@ type OpenAIClient struct {
 }
 
 func (o *OpenAIClient) GetSuggestion(req *Request) (*Suggestion, error) {
-	if o.APIKey == "" {
-		apiKey := os.Getenv("OPENAI_API_KEY")
-		o.APIKey = apiKey
+	apiKey := o.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": o.Model,
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are a helpful DevOps assistant. Respond with JSON containing explanation, proposed_fix, and risk_level."},
-			{"role": "user", "content": fmt.Sprintf("Command: %s\nError: %s\nEnvironment: %+v", req.Command, req.Stderr, req.Environment)},
+			{"role": "system", "content": "You are a DevOps fix assistant. Given a failed command, respond with ONLY a JSON object (no markdown, no explanation outside JSON): {\"explanation\": \"one sentence\", \"proposed_fix\": \"single shell command\", \"risk_level\": \"low\"}. If no fix exists, return {\"explanation\": \"cannot fix\", \"proposed_fix\": \"\", \"risk_level\": \"high\"}"},
+			{"role": "user", "content": fmt.Sprintf("Failed command: %s\nStderr: %s\nOS: %s, Package Manager: %s\n\nReturn JSON with proposed_fix as a single shell command or empty if unfixable.", req.Command, req.Stderr, req.Environment.OS, req.Environment.PackageManager)},
 		},
-		"response_format": map[string]string{"type": "json_object"},
 	})
 
 	httpReq, _ := http.NewRequest("POST", o.Endpoint+"/chat/completions", bytes.NewBuffer(body))
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+o.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, err
+		return &Suggestion{Explanation: "LLM API call failed", ProposedFix: "", RiskLevel: RiskHigh}, nil
 	}
 	defer resp.Body.Close()
 
@@ -94,16 +94,65 @@ func (o *OpenAIClient) GetSuggestion(req *Request) (*Suggestion, error) {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	json.Unmarshal(respBody, &result)
 
-	if len(result.Choices) == 0 {
-		return &Suggestion{}, nil
+	if result.Error.Message != "" {
+		return &Suggestion{Explanation: "LLM error: " + result.Error.Message, ProposedFix: "", RiskLevel: RiskHigh}, nil
 	}
 
+	if len(result.Choices) == 0 {
+		return &Suggestion{Explanation: "No LLM response", ProposedFix: "", RiskLevel: RiskHigh}, nil
+	}
+
+	content := result.Choices[0].Message.Content
+	content = extractJSON(content)
+
 	var sug Suggestion
-	json.Unmarshal([]byte(result.Choices[0].Message.Content), &sug)
+	json.Unmarshal([]byte(content), &sug)
 	return &sug, nil
+}
+
+func extractJSON(s string) string {
+	if idx := indexOf(s, "```json"); idx >= 0 {
+		s = s[idx+7:]
+		if end := indexOf(s, "```"); end >= 0 {
+			s = s[:end]
+		}
+	} else if idx := indexOf(s, "```"); idx >= 0 {
+		s = s[idx+3:]
+		if end := indexOf(s, "```"); end >= 0 {
+			s = s[:end]
+		}
+	}
+	start := indexOf(s, "{")
+	if start >= 0 {
+		s = s[start:]
+		depth := 0
+		for i, c := range s {
+			if c == '{' {
+				depth++
+			} else if c == '}' {
+				depth--
+				if depth == 0 {
+					return s[:i+1]
+				}
+			}
+		}
+	}
+	return s
+}
+
+func indexOf(s string, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
 
 func NewClient(provider, apiKey, endpoint, model string) Client {
