@@ -7,6 +7,23 @@ echo "Installing AutoFix ${VERSION}..."
 
 detect_os() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "darwin"
+    elif [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
+            echo "linux"
+        elif [[ "$ID" == "fedora" ]]; then
+            echo "linux"
+        elif [[ "$ID" == "arch" ]]; then
+            echo "linux"
+        else
+            echo "linux"
+        fi
+    else
+        echo "linux"
+    fi
+}
+    if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "macos"
     elif [[ -f /etc/os-release ]]; then
         . /etc/os-release
@@ -53,7 +70,7 @@ DOWNLOAD_URL="https://github.com/steliosot/autofix/releases/download/v${VERSION}
 echo "Downloading binary for ${OS}/${ARCH}..."
 
 if command -v curl &> /dev/null; then
-    curl -fsSL -o /tmp/autofix "$DOWNLOAD_URL"
+    curl -fsSL -L -o /tmp/autofix "$DOWNLOAD_URL"
 elif command -v wget &> /dev/null; then
     wget -q -O /tmp/autofix "$DOWNLOAD_URL"
 else
