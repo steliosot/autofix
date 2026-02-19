@@ -9,33 +9,7 @@ detect_os() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "darwin"
     elif [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
-            echo "linux"
-        elif [[ "$ID" == "fedora" ]]; then
-            echo "linux"
-        elif [[ "$ID" == "arch" ]]; then
-            echo "linux"
-        else
-            echo "linux"
-        fi
-    else
         echo "linux"
-    fi
-}
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    elif [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
-            echo "ubuntu"
-        elif [[ "$ID" == "fedora" ]]; then
-            echo "fedora"
-        elif [[ "$ID" == "arch" ]]; then
-            echo "arch"
-        else
-            echo "linux"
-        fi
     else
         echo "linux"
     fi
@@ -104,5 +78,5 @@ Example usage:
   autofix run 'npm install'
   autofix run 'pip install requests'
 
-For more information, visit: https://github.com/autofix/cli
+For more information, visit: https://github.com/steliosot/autofix
 EOF
