@@ -17,7 +17,7 @@ A production-ready CLI tool for language-agnostic, environment-aware, self-heali
 ### Via Install Script (Non-interactive)
 
 ```bash
-curl -fsSL https://yourdomain/install.sh | bash
+curl -fsSL https://github.com/steliosot/autofix/raw/main/install.sh | bash
 ```
 
 ### Manually

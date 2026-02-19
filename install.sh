@@ -48,7 +48,7 @@ if [[ "$ARCH" == "unknown" ]]; then
 fi
 
 BINARY_NAME="autofix-${OS}-${ARCH}"
-DOWNLOAD_URL="https://raw.githubusercontent.com/steliosot/autofix/main/${BINARY_NAME}"
+DOWNLOAD_URL="https://github.com/steliosot/autofix/releases/download/v${VERSION}/${BINARY_NAME}"
 
 echo "Downloading binary for ${OS}/${ARCH}..."
 
